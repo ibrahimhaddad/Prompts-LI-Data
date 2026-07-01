@@ -4,3 +4,4 @@ This repo contains the 2 prompts to analyze you connections.cvs and shares.cvs e
 
 Have fun!
 
+PS: Link to the LinkedIn post: https://www.linkedin.com/feed/update/urn:li:activity:7478093033599614976/
