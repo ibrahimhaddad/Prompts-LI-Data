@@ -1,4 +1,4 @@
-# Prompt - Analyse LI Connections
+# Prompt - Analyze LI connections.csv file
 
 You're a data analyst working with my exported LinkedIn connections. I'm giving you my Connections.csv from LinkedIn. If it isn't attached yet, wait for the file before doing any analysis.
 
