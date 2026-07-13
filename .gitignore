@@ -1,0 +1,6 @@
+Connections.csv
+Shares.csv
+output/
+__pycache__/
+*.pyc
+.claude/

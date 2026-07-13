@@ -1,0 +1,414 @@
+<title>Posting vs. New Connections — Monthly Correlation</title>
+<style>
+  :root{
+    --surface: #161a22;
+    --surface-2: #1d2330;
+    --panel-border: rgba(255,255,255,0.08);
+    --ink: #f2f3f5;
+    --ink-secondary: #b7bcc7;
+    --ink-muted: #7d8394;
+    --blue: #3987e5;
+    --aqua: #1baf7a;
+    --violet: #9085e9;
+    --grid: #2c2c2a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--surface);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 22px 40px 22px;
+  }
+  h1{
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+  }
+  .subtitle{
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    margin: 0 0 14px 0;
+  }
+  .stats-grid{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .stat-tile{
+    background: var(--surface-2);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .stat-tile .lbl{
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+    margin-bottom: 3px;
+  }
+  .stat-tile .val{
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-tile .sub{
+    font-size: 10.5px;
+    color: var(--ink-secondary);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .panel{
+    background: var(--surface-2);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 14px 16px 10px 16px;
+    margin-bottom: 16px;
+  }
+  .panel-title{
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+    margin-bottom: 6px;
+    display:flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .legend-inline{
+    display:flex;
+    gap:14px;
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-weight: 400;
+  }
+  .legend-inline span{ display:flex; align-items:center; gap:5px; }
+  .swatch{ width:9px; height:9px; border-radius:2px; display:inline-block; }
+  svg{ display:block; }
+  .axis path, .axis line{ stroke: var(--grid); }
+  .axis text{ fill: var(--ink-muted); font-size: 10px; }
+  .gridline{ stroke: var(--grid); stroke-width: 1; }
+  .caption{
+    font-size: 11px;
+    color: var(--ink-muted);
+    line-height: 1.5;
+    padding-top: 6px;
+  }
+  .tooltip{
+    position: fixed;
+    pointer-events: none;
+    background: #0d1017;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--ink);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 10;
+    max-width: 220px;
+  }
+  .tooltip .t-title{ font-weight:600; margin-bottom:2px; }
+  .tooltip .t-row{ color: var(--ink-secondary); font-size: 11.5px; }
+  .fit-annot{
+    font-size: 12px;
+    fill: var(--ink-secondary);
+  }
+  .fit-annot .r-val{ fill: var(--ink); font-weight:600; }
+</style>
+
+<div class="wrap">
+  <h1>Posting Frequency vs. New Connections — Monthly</h1>
+  <p class="subtitle" id="subtitle">Loading…</p>
+
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Monthly timeline</span>
+      <span class="legend-inline">
+        <span><span class="swatch" style="background:var(--blue)"></span>Posts (left axis)</span>
+        <span><span class="swatch" style="background:var(--aqua)"></span>New connections (right axis)</span>
+      </span>
+    </div>
+    <svg id="timeline"></svg>
+    <div class="caption">Bars = posts published that calendar month (left axis). Line = new connections gained that calendar month (right axis). X-axis runs from the first post month through the latest month present in either file.</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Posts vs. new connections, one dot per month</span>
+      <span class="legend-inline">
+        <span><span class="swatch" style="background:var(--violet)"></span>Month</span>
+      </span>
+    </div>
+    <svg id="scatter"></svg>
+    <div class="caption" id="scatter-caption"></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+/*__D3_JS__*/
+</script>
+<script>
+const DATA = /*__DATA_JSON__*/;
+
+const months = DATA.months;
+const posts = DATA.post_series;
+const conns = DATA.conn_series;
+const n = months.length;
+const corr = DATA.correlations;
+const ols = DATA.ols;
+const totals = DATA.totals;
+
+document.getElementById("subtitle").textContent =
+  `Window: ${months[0]} through ${months[n-1]} (${n} months, starting the month of my first post). ` +
+  `${totals.conns_before_window} connections dated before that window were excluded, per instructions, so a forced run of zeros wouldn't distort the correlation.`;
+
+function fmtP(p){
+  if(p < 0.0001) return "p<0.0001";
+  return "p=" + p.toFixed(4);
+}
+function fmtR(r){ return (r>=0?"+":"") + r.toFixed(3); }
+
+const statsGrid = document.getElementById("stats-grid");
+const stats = [
+  {lbl:"Total posts", val: totals.posts_all, sub: `${totals.posts_in_window} in window`},
+  {lbl:"Total connections", val: totals.conns_all.toLocaleString(), sub: `${totals.conns_in_window} in window`},
+  {lbl:"Window", val: `${n} months`, sub: `${months[0]} – ${months[n-1]}`},
+  {lbl:"Pearson r (raw levels)", val: fmtR(corr.pearson_raw.r), sub: fmtP(corr.pearson_raw.p) + `, n=${corr.pearson_raw.n}`},
+  {lbl:"Spearman ρ (rank)", val: fmtR(corr.spearman.rho), sub: fmtP(corr.spearman.p)},
+  {lbl:"Pearson r (detrended)", val: fmtR(corr.pearson_detrended.r), sub: fmtP(corr.pearson_detrended.p)},
+  {lbl:"Pearson r (month Δ)", val: fmtR(corr.pearson_diff.r), sub: fmtP(corr.pearson_diff.p) + `, n=${corr.pearson_diff.n}`},
+  {lbl:"OLS slope", val: ols.slope.toFixed(2) + " conn/post", sub: `intercept ${ols.intercept.toFixed(2)}`},
+];
+stats.forEach(s => {
+  const el = document.createElement("div");
+  el.className = "stat-tile";
+  el.innerHTML = `<div class="lbl">${s.lbl}</div><div class="val">${s.val}</div><div class="sub">${s.sub}</div>`;
+  statsGrid.appendChild(el);
+});
+
+const tooltip = document.getElementById("tooltip");
+function showTooltip(evt, monthLabel, p, c){
+  tooltip.innerHTML = `<div class="t-title">${monthLabel}</div>` +
+    `<div class="t-row">Posts: ${p}</div><div class="t-row">New connections: ${c}</div>`;
+  tooltip.style.opacity = 1;
+  let left = evt.clientX + 14, top = evt.clientY + 10;
+  if(left + 230 > window.innerWidth) left = evt.clientX - 244;
+  tooltip.style.left = left + "px";
+  tooltip.style.top = top + "px";
+}
+function hideTooltip(){ tooltip.style.opacity = 0; }
+
+// ---------------- TIMELINE PANEL ----------------
+(function(){
+  const container = document.getElementById("timeline");
+  const wrapWidth = container.parentElement.clientWidth;
+  const margin = {top: 10, right: 46, bottom: 26, left: 40};
+  const width = wrapWidth - margin.left - margin.right;
+  const height = 260 - margin.top - margin.bottom;
+
+  const svg = d3.select("#timeline")
+    .attr("width", wrapWidth)
+    .attr("height", 260);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x = d3.scaleBand().domain(months).range([0, width]).padding(0.25);
+  const yPosts = d3.scaleLinear().domain([0, d3.max(posts, d=>d) + 1]).range([height, 0]).nice();
+  const maxConn = d3.max(conns, d=>d);
+  const yConns = d3.scaleLinear().domain([0, maxConn * 1.12]).range([height, 0]);
+
+  // gridlines (left axis)
+  g.append("g")
+    .attr("class", "gridline-group")
+    .selectAll("line")
+    .data(yPosts.ticks(4))
+    .join("line")
+    .attr("class", "gridline")
+    .attr("x1", 0).attr("x2", width)
+    .attr("y1", d => yPosts(d)).attr("y2", d => yPosts(d));
+
+  // x axis: show a tick only at January of each year to avoid clutter
+  const janIdx = months.map((m,i) => ({m,i})).filter(d => d.m.endsWith("-01"));
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${height})`)
+    .call(d3.axisBottom(x).tickValues(janIdx.map(d=>d.m)).tickFormat(d => d.slice(0,4)));
+
+  g.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(yPosts).ticks(4).tickFormat(d3.format("d")));
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(${width},0)`)
+    .call(d3.axisRight(yConns).ticks(5).tickFormat(d3.format("d")));
+
+  // bars: posts
+  g.append("g").selectAll("rect")
+    .data(months)
+    .join("rect")
+    .attr("class", "bar")
+    .attr("x", m => x(m))
+    .attr("width", x.bandwidth())
+    .attr("y", (m,i) => yPosts(posts[i]))
+    .attr("height", (m,i) => height - yPosts(posts[i]))
+    .attr("fill", "var(--blue)")
+    .attr("fill-opacity", 0.85);
+
+  // line: connections
+  const lineGen = d3.line()
+    .x(m => x(m) + x.bandwidth()/2)
+    .y((m,i) => yConns(conns[i]));
+  g.append("path")
+    .datum(months)
+    .attr("fill", "none")
+    .attr("stroke", "var(--aqua)")
+    .attr("stroke-width", 1.6)
+    .attr("d", lineGen);
+
+  const connDots = g.append("g").selectAll("circle")
+    .data(months)
+    .join("circle")
+    .attr("cx", m => x(m) + x.bandwidth()/2)
+    .attr("cy", (m,i) => yConns(conns[i]))
+    .attr("r", 2.2)
+    .attr("fill", "var(--aqua)");
+
+  // hover guide
+  const guide = g.append("line")
+    .attr("y1", 0).attr("y2", height)
+    .attr("stroke", "rgba(255,255,255,0.25)")
+    .attr("stroke-dasharray", "3,3")
+    .style("display", "none");
+
+  const overlay = g.append("rect")
+    .attr("width", width).attr("height", height)
+    .attr("fill", "transparent")
+    .on("mousemove", function(event){
+      const [mx] = d3.pointer(event);
+      const idx = Math.min(months.length - 1, Math.max(0, Math.floor(mx / x.step())));
+      const m = months[idx];
+      guide.style("display", null).attr("x1", x(m)+x.bandwidth()/2).attr("x2", x(m)+x.bandwidth()/2);
+      showTooltip(event, m, posts[idx], conns[idx]);
+      highlightScatter(idx);
+    })
+    .on("mouseleave", function(){
+      guide.style("display", "none");
+      hideTooltip();
+      highlightScatter(null);
+    });
+})();
+
+// ---------------- SCATTER PANEL ----------------
+let highlightTimelineIdx = null;
+let scatterPoints;
+
+function highlightScatter(idx){
+  if(!scatterPoints) return;
+  scatterPoints
+    .attr("fill-opacity", (d,i) => idx === null ? 0.55 : (i === idx ? 1 : 0.15))
+    .attr("r", (d,i) => idx === null ? 5 : (i === idx ? 7 : 5));
+}
+
+(function(){
+  const container = document.getElementById("scatter");
+  const wrapWidth = container.parentElement.clientWidth;
+  const margin = {top: 14, right: 24, bottom: 34, left: 44};
+  const width = wrapWidth - margin.left - margin.right;
+  const height = 320 - margin.top - margin.bottom;
+
+  const svg = d3.select("#scatter")
+    .attr("width", wrapWidth)
+    .attr("height", 320);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const maxPosts = d3.max(posts, d=>d);
+  const maxConn = d3.max(conns, d=>d);
+  const x = d3.scaleLinear().domain([-0.4, maxPosts + 0.4]).range([0, width]);
+  const y = d3.scaleLinear().domain([0, maxConn * 1.1]).range([height, 0]);
+
+  g.append("g").selectAll("line.gridline")
+    .data(y.ticks(5))
+    .join("line")
+    .attr("class", "gridline")
+    .attr("x1", 0).attr("x2", width)
+    .attr("y1", d=>y(d)).attr("y2", d=>y(d));
+
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${height})`)
+    .call(d3.axisBottom(x).ticks(maxPosts+1).tickFormat(d3.format("d")));
+  g.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d")));
+
+  g.append("text")
+    .attr("x", width/2).attr("y", height + 30)
+    .attr("text-anchor", "middle")
+    .attr("fill", "var(--ink-muted)")
+    .attr("font-size", 11)
+    .text("Posts that month");
+  g.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -height/2).attr("y", -32)
+    .attr("text-anchor", "middle")
+    .attr("fill", "var(--ink-muted)")
+    .attr("font-size", 11)
+    .text("New connections that month");
+
+  // deterministic jitter per month index, purely visual (fit line uses true values)
+  function jitter(i){
+    const h = Math.sin(i * 12.9898) * 43758.5453;
+    return ((h - Math.floor(h)) - 0.5) * 0.5;
+  }
+
+  // OLS fit line, using the same slope/intercept reported in the stats header
+  const fx = [Math.min(...posts), Math.max(...posts)];
+  g.append("line")
+    .attr("x1", x(fx[0])).attr("x2", x(fx[1]))
+    .attr("y1", y(ols.slope*fx[0] + ols.intercept))
+    .attr("y2", y(ols.slope*fx[1] + ols.intercept))
+    .attr("stroke", "var(--ink-secondary)")
+    .attr("stroke-width", 1.5)
+    .attr("stroke-dasharray", "5,3");
+
+  g.append("text")
+    .attr("class", "fit-annot")
+    .attr("x", width - 6).attr("y", 14)
+    .attr("text-anchor", "end")
+    .html(`Pearson <tspan class="r-val">r = ${fmtR(corr.pearson_raw.r)}</tspan> (${fmtP(corr.pearson_raw.p)}, n=${corr.pearson_raw.n})`);
+
+  scatterPoints = g.append("g").selectAll("circle")
+    .data(months)
+    .join("circle")
+    .attr("cx", (m,i) => x(posts[i] + jitter(i)))
+    .attr("cy", (m,i) => y(conns[i]))
+    .attr("r", 5)
+    .attr("fill", "var(--violet)")
+    .attr("fill-opacity", 0.55)
+    .attr("stroke", "rgba(255,255,255,0.25)")
+    .attr("stroke-width", 0.6)
+    .on("mousemove", function(event, m){
+      const i = months.indexOf(m);
+      showTooltip(event, m, posts[i], conns[i]);
+      highlightScatter(i);
+    })
+    .on("mouseleave", function(){
+      hideTooltip();
+      highlightScatter(null);
+    });
+
+  document.getElementById("scatter-caption").textContent =
+    `Posts per month only takes the values 0, 1, or 2 in this window, so dots are jittered slightly left/right for readability — the OLS fit line and the annotated Pearson r are computed on the true, unjittered monthly values (same numbers as the stats header and the correlation report).`;
+})();
+</script>
